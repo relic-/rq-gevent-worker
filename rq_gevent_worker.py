@@ -36,6 +36,7 @@ class GeventWorker(Worker):
         if 'pool_size' in kwargs:
             pool_size = kwargs.pop('pool_size')
         self.gevent_pool = gevent.pool.Pool(pool_size)
+        self.children = []
         super(GeventWorker, self).__init__(*args, **kwargs)
 
     def register_birth(self):
@@ -101,7 +102,7 @@ class GeventWorker(Worker):
                     if result is None and burst:
                         try:
                             # Make sure dependented jobs are enqueued.
-                            get_hub().switch()
+                            gevent.wait(self.children)
                         except LoopExit:
                             pass
                         result = self.dequeue_job_and_maintain_ttl(timeout)
@@ -121,6 +122,7 @@ class GeventWorker(Worker):
 
     def execute_job(self, job, queue):
         def job_done(child):
+            self.children.remove(child)
             self.did_perform_work = True
             self.heartbeat()
             if job.get_status() == Status.FINISHED:
@@ -128,6 +130,7 @@ class GeventWorker(Worker):
 
         child_greenlet = self.gevent_pool.spawn(self.perform_job, job)
         child_greenlet.link(job_done)
+        self.children.append(child_greenlet)
 
     def dequeue_job_and_maintain_ttl(self, timeout):
         if self._stopped:
