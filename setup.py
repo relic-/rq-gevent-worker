@@ -26,7 +26,7 @@ from setuptools import setup
 
 setup(
     name='rq-gevent-worker',
-    version='0.1.5',
+    version='0.1.6',
     py_modules=['rq_gevent_worker'],
     entry_points={
         'console_scripts': [

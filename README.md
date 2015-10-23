@@ -5,6 +5,10 @@ Implement a new worker based on gevent
 
 [![Downloads](https://pypip.in/download/rq-gevent-worker/badge.svg)](https://pypi.python.org/pypi/rq-gevent-worker/)
 
+##Install this fork
+
+    pip install --upgrade -e git+https://github.com/relic-/rq-gevent-worker.git@master#egg=rq-gevent-worker
+
 ##Install
 
     $ pip install rq-gevent-worker
