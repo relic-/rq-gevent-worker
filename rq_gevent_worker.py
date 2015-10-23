@@ -23,7 +23,7 @@ from rq.version import VERSION
 
 class GeventDeathPenalty(BaseDeathPenalty):
     def setup_death_penalty(self):
-        exception = JobTimeoutException('Gevent Job exceeded maximum timeout value (%d seconds).' % self._timeout)
+        exception = JobTimeoutException('Gevent Job exceeded maximum timeout value ({0} seconds).'.format(self._timeout))
         self.gevent_timeout = gevent.Timeout(self._timeout, exception)
         self.gevent_timeout.start()
 
@@ -93,7 +93,7 @@ class GeventWorker(Worker):
 
         self.did_perform_work = False
         self.register_birth()
-        self.log.info("RQ GEVENT worker (Greenlet pool size={0}) {1!r} started, version {2}".
+        self.log.info("RQ gevent worker (greenlet pool size={0}) {1!r} started, version {2}".
                       format(self.gevent_pool.size, self.key, VERSION))
         self.set_state(WorkerStatus.STARTED)
 
@@ -153,8 +153,19 @@ class GeventWorker(Worker):
             self.gevent_greenlets.remove(child)
             self.did_perform_work = True
             self.heartbeat()
+
+            if not self.gevent_greenlets and self.get_state() != WorkerStatus.IDLE:
+                qnames = self.queue_names()
+                self.set_state(WorkerStatus.IDLE)
+                self.procline('Listening on {0}'.format(','.join(qnames)))
+                self.log.info('')
+                self.log.info('*** Listening on {0}...'.format(green(', '.join(qnames))))
+
             if job.get_status() == JobStatus.FINISHED:
                 queue.enqueue_dependents(job)
+
+        if self.get_state() != WorkerStatus.BUSY:
+            self.set_state(WorkerStatus.BUSY)
 
         child_greenlet = self.gevent_pool.spawn(self.perform_job, job)
         child_greenlet.link(job_done)
@@ -165,15 +176,19 @@ class GeventWorker(Worker):
             raise StopRequested()
 
         result = None
+
+        if not self.gevent_greenlets and self.get_state() != WorkerStatus.IDLE:
+            qnames = self.queue_names()
+            self.set_state(WorkerStatus.IDLE)
+            self.procline('Listening on {0}'.format(','.join(qnames)))
+            self.log.info('')
+            self.log.info('*** Listening on {0}...'.format(green(', '.join(qnames))))
+
         while True:
             if self._stop_requested:
                 raise StopRequested()
 
             self.heartbeat()
-
-            if self.gevent_pool.full():
-                self.set_state(WorkerStatus.BUSY)
-                self.log.warning("RQ GEVENT worker greenlet pool empty current size %s", self.gevent_pool.size)
 
             while self.gevent_pool.full():
                 gevent.sleep(0.1)
@@ -181,12 +196,13 @@ class GeventWorker(Worker):
                     raise StopRequested()
 
             try:
-                result = self.queue_class.dequeue_any(self.queues, timeout, connection=self.connection)
-                self.set_state(WorkerStatus.IDLE)
+                result = self.queue_class.dequeue_any(self.queues, timeout,
+                                                      connection=self.connection)
                 if result is not None:
                     job, queue = result
-                    self.log.info('%s: %s (%s)' % (green(queue.name),
-                                  blue(job.description), job.id))
+                    self.log.info('{0}: {1} ({2})'.format(green(queue.name),
+                                                          blue(job.description), job.id))
+
                 break
             except DequeueTimeout:
                 pass
