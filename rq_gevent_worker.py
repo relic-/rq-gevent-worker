@@ -167,7 +167,7 @@ class GeventWorker(Worker):
         if self.get_state() != WorkerStatus.BUSY:
             self.set_state(WorkerStatus.BUSY)
 
-        child_greenlet = self.gevent_pool.spawn(self.perform_job, job)
+        child_greenlet = self.gevent_pool.spawn(self.perform_job, job, queue)
         child_greenlet.link(job_done)
         self.gevent_greenlets.append(child_greenlet)
 
